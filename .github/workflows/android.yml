@@ -27,7 +27,7 @@ jobs:
       # 仓库内没有 gradle-wrapper.jar 时，用系统 gradle 生成
       - name: Ensure Gradle wrapper
         run: |
-          if [ ! -f gradlew ]; then
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
             GRADLE_VER=$(sed -n 's/.*gradle-\([0-9.]*\)-bin.*/\1/p' gradle/wrapper/gradle-wrapper.properties 2>/dev/null | head -1)
             gradle wrapper --gradle-version "${GRADLE_VER:-8.7}" || gradle wrapper
           fi
