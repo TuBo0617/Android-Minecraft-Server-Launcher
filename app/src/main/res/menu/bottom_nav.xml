@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/nav_instances" android:title="@string/title_instances"/>
+    <item android:id="@+id/nav_download" android:title="@string/title_download"/>
+    <item android:id="@+id/nav_mods" android:title="@string/title_mods"/>
+    <item android:id="@+id/nav_console" android:title="@string/title_console"/>
+    <item android:id="@+id/nav_settings" android:title="@string/title_settings"/>
+</menu>

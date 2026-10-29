@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">MC服务器启动器</string>
+    <string name="title_instances">实例</string>
+    <string name="title_download">下载核心</string>
+    <string name="title_mods">模组/插件</string>
+    <string name="title_console">控制台</string>
+    <string name="title_settings">设置</string>
+    <string name="title_java">Java</string>
+    <string name="title_downloads">下载管理</string>
+    <string name="settings_help">说明：本启动器的数据（服务器实例、Java、下载缓存）统一保存在 /storage/emulated/0/MCServerLauncher/\n\nJava 运行时由「Java」页从 Termux 仓库直接下载解包到 java/ 目录，无需另装 Termux。所有下载的进度与完整日志可在「下载」页查看。\n\n基岩版(BDS)为 Linux glibc 二进制，原生安卓需 proot + Debian rootfs 才能运行，当前仅提供入口与依赖下载。</string>
+</resources>

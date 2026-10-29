@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#DDDDDD" />
+
+    <LinearLayout
+        android:id="@+id/tabbar"
+        android:layout_width="match_parent"
+        android:layout_height="58dp"
+        android:background="@color/white"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/nav_instances"
+            style="@style/TabBarItem"
+            android:text="🗂&#10;实例" />
+
+        <TextView
+            android:id="@+id/nav_core"
+            style="@style/TabBarItem"
+            android:text="⬇&#10;核心" />
+
+        <TextView
+            android:id="@+id/nav_mods"
+            style="@style/TabBarItem"
+            android:text="🧩&#10;模组" />
+
+        <TextView
+            android:id="@+id/nav_console"
+            style="@style/TabBarItem"
+            android:text="💻&#10;控制台" />
+
+        <TextView
+            android:id="@+id/nav_java"
+            style="@style/TabBarItem"
+            android:text="☕&#10;Java" />
+
+        <TextView
+            android:id="@+id/nav_downloads"
+            style="@style/TabBarItem"
+            android:text="📥&#10;下载" />
+
+        <TextView
+            android:id="@+id/nav_settings"
+            style="@style/TabBarItem"
+            android:text="⚙&#10;设置" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:padding="16dp">
+    <LinearLayout android:orientation="vertical"
+        android:layout_width="match_parent" android:layout_height="wrap_content">
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="① Java 运行时" android:textStyle="bold" android:textSize="15sp"
+            android:textColor="#1B5E20"/>
+        <TextView android:id="@+id/arch_info" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="12sp" android:textColor="#666" android:paddingTop="4dp"/>
+        <TextView android:id="@+id/java_current" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="12sp" android:textColor="#1B5E20" android:paddingTop="4dp"/>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Java 的下载、安装与切换已移到下方菜单的「Java」页，启动器会自动检测已安装的 Java。"
+            android:textSize="11sp" android:textColor="#888" android:paddingTop="4dp"/>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#ddd"
+            android:layout_marginVertical="12dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="② 服务器参数" android:textStyle="bold" android:textSize="15sp" android:textColor="#1B5E20"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp"
+            android:text="最大内存 (MB)" android:textSize="13sp"/>
+        <EditText android:id="@+id/max_mem" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:inputType="number" android:text="1024"/>
+        <CheckBox android:id="@+id/auto_eula" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="启动前自动同意 EULA" android:checked="true"/>
+        <CheckBox android:id="@+id/use_nogui" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="附加 nogui 参数" android:checked="true"/>
+        <Button android:id="@+id/save" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="保存设置"/>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#ddd"
+            android:layout_marginVertical="12dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="③ 数据目录" android:textStyle="bold" android:textSize="15sp" android:textColor="#1B5E20"/>
+        <TextView android:id="@+id/storage_info" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:paddingTop="4dp" android:textSize="11sp" android:textColor="#666"/>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#ddd"
+            android:layout_marginVertical="12dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="④ 远程网页控制台" android:textStyle="bold" android:textSize="15sp" android:textColor="#1B5E20"/>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="4dp"
+            android:text="开启后，同一 Wi-Fi 下其他设备用浏览器访问下面地址，即可看日志/发命令/启停服务器。"
+            android:textSize="12sp" android:textColor="#666"/>
+        <Button android:id="@+id/btn_web" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="6dp" android:text="启动远程控制台"/>
+        <TextView android:id="@+id/web_addr" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="13sp" android:textColor="#1B5E20" android:paddingTop="4dp"/>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#ddd"
+            android:layout_marginVertical="12dp"/>
+
+        <Button android:id="@+id/detect" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="检测环境"/>
+        <TextView android:id="@+id/env_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:textSize="11sp" android:textColor="#444"/>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp"
+            android:text="@string/settings_help" android:textSize="12sp" android:textColor="#666"/>
+    </LinearLayout>
+</ScrollView>

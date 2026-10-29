@@ -1,0 +1,31 @@
+# Gradle
+.gradle/
+build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.iml
+
+# Android Studio / IDEA
+.idea/
+*.hprof
+
+# 本地配置（含本机 SDK 路径，不应提交）
+local.properties
+keystore.properties
+*.jks
+*.keystore
+
+# 构建产物
+*.apk
+*.aab
+*.ap_
+*.dex
+output-metadata.json
+
+# 日志与临时文件
+*.log
+.DS_Store
+Thumbs.db
+tmp/

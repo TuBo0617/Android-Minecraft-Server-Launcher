@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent" android:layout_height="match_parent">
+    <LinearLayout android:orientation="horizontal" android:padding="6dp"
+        android:layout_width="match_parent" android:layout_height="wrap_content">
+        <Button android:id="@+id/btn_start" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:text="启动服务器"/>
+        <Button android:id="@+id/btn_stop" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:text="停止"/>
+        <Button android:id="@+id/btn_clear" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:text="清屏"/>
+    </LinearLayout>
+    <ScrollView android:id="@+id/scroll" android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:background="#101410">
+        <TextView android:id="@+id/log" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:fontFamily="monospace" android:textSize="11sp" android:textColor="#B9F6CA"
+            android:padding="8dp" android:textIsSelectable="true"/>
+    </ScrollView>
+    <LinearLayout android:orientation="horizontal" android:padding="6dp"
+        android:layout_width="match_parent" android:layout_height="wrap_content">
+        <EditText android:id="@+id/cmd" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:hint="输入控制台命令，如 op Steve / stop"
+            android:inputType="text" android:imeOptions="actionSend"/>
+        <Button android:id="@+id/btn_send" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="发送"/>
+    </LinearLayout>
+</LinearLayout>
