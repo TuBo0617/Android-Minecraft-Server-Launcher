@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose 外壳中用于承载旧 Fragment 页面的容器 id（固定值，便于旋转后状态恢复） -->
+    <item name="legacy_fragment_host" type="id" />
+</resources>
