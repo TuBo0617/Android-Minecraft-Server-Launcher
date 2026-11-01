@@ -45,7 +45,11 @@ object JdkManager {
     private data class PkgInfo(
         val name: String,
         val filename: String,
-        val depends: List<String>
+        val depends: List<String>,
+        /** 索引里声明的字节数，用于校验下载是否完整 */
+        val size: Long = 0,
+        /** 索引里声明的 SHA256，用于校验内容是否损坏 */
+        val sha256: String = ""
     )
 
     fun arch(): String {
@@ -228,22 +232,25 @@ object JdkManager {
         val key = "${source.id}|$arch"
         indexCache[key]?.let { return it }
 
-        val suffixes = listOf("Packages.xz", "Packages.gz", "Packages")
+        // gz 比明文小 60%，手机上更不容易半路超时；xz 部分镜像没有，放最后
+        val suffixes = listOf("Packages.gz", "Packages.xz", "Packages")
         for (suffix in suffixes) {
             val url = "${source.baseUrl}/dists/stable/main/binary-$arch/$suffix"
             try {
-                val raw = Net.getBytes(url, 45000)
+                val raw = Net.getBytes(url, 90000)
                 val stream = when {
                     suffix.endsWith(".xz") -> XZInputStream(ByteArrayInputStream(raw))
                     suffix.endsWith(".gz") -> GZIPInputStream(ByteArrayInputStream(raw))
                     else -> ByteArrayInputStream(raw)
                 }
                 val map = stream.use { parseIndex(it) }
-                if (map.isEmpty()) {
-                    log("  索引 $suffix 内容异常（无 Package 字段）")
+                // Termux 主仓库有 3000 个左右的包；明显偏少说明索引被截断了，
+                // 这时候「找不到 openjdk」是假象，换下一个源而不是直接判死
+                if (map.size < 300) {
+                    log("  索引 $suffix 不完整（仅 ${map.size} 个包，${raw.size / 1024}KB），换下一个源")
                     continue
                 }
-                log("  索引就绪：$suffix，${map.size} 个包")
+                log("  索引就绪：$suffix，${map.size} 个包（${raw.size / 1024}KB）")
                 indexCache[key] = map
                 return map
             } catch (e: Exception) {
@@ -259,14 +266,18 @@ object JdkManager {
         var name = ""
         var filename = ""
         var depends = ""
+        var size = 0L
+        var sha256 = ""
 
         fun flush() {
             if (name.isNotEmpty() && filename.isNotEmpty()) {
-                map[name] = PkgInfo(name, filename, splitDepends(depends))
+                map[name] = PkgInfo(name, filename, splitDepends(depends), size, sha256)
             }
             name = ""
             filename = ""
             depends = ""
+            size = 0L
+            sha256 = ""
         }
 
         input.bufferedReader(Charsets.UTF_8).use { reader ->
@@ -276,6 +287,8 @@ object JdkManager {
                 when {
                     line.startsWith("Package: ") -> name = line.removePrefix("Package: ").trim()
                     line.startsWith("Filename: ") -> filename = line.removePrefix("Filename: ").trim()
+                    line.startsWith("Size: ") -> size = line.removePrefix("Size: ").trim().toLongOrNull() ?: 0L
+                    line.startsWith("SHA256: ") -> sha256 = line.removePrefix("SHA256: ").trim().lowercase()
                     line.startsWith("Depends: ") -> depends = line.removePrefix("Depends: ").trim()
                     line.startsWith("Pre-Depends: ") -> depends =
                         (depends + ", " + line.removePrefix("Pre-Depends: ").trim()).trim(',', ' ')
@@ -392,6 +405,24 @@ object JdkManager {
                         }
                         task.log("   已保存: ${deb.absolutePath}")
                     }
+                    // 索引里有 Size 字段，对不上就是下载被截断了（移动网络很常见）。
+                    // 不校验的话会在解压阶段报一堆莫名其妙的错，看不出真正原因。
+                    if (info.size > 0 && deb.length() != info.size) {
+                        val got = deb.length()
+                        runCatching { deb.delete() }
+                        throw Exception(
+                            "下载不完整: ${info.name}（应为 ${info.size / 1024 / 1024}MB，" +
+                                    "实际 ${got / 1024 / 1024}MB），请重试"
+                        )
+                    }
+                    // 大小对得上也可能是坏包（多线程分块拼错），再用 SHA256 确认一次
+                    if (info.sha256.isNotEmpty()) {
+                        val actual = sha256Of(deb)
+                        if (!actual.equals(info.sha256, ignoreCase = true)) {
+                            runCatching { deb.delete() }
+                            throw Exception("下载内容损坏: ${info.name}（SHA256 不匹配），已删除缓存，请重试")
+                        }
+                    }
                     task.log("[$idxNo/${jobs.size}] 解压 ${info.name} …")
                     val okExtract = DebExtractor.extract(deb, destDir) { line -> task.log("   $line") }
                     if (!okExtract) throw Exception("解压失败: ${info.name}")
@@ -407,11 +438,16 @@ object JdkManager {
 
                 // 自检：跑一次 java -version，把真实输出写进日志，方便定位缺库等问题
                 val check = verifyJava(bin, jdkHome, task)
-                DlManager.success(
-                    task,
-                    if (check == null) "安装完成: ${jdkHome.absolutePath}"
-                    else "已安装到 ${jdkHome.absolutePath}，但 java -version 自检未通过（详见日志）"
-                )
+                if (check == null) {
+                    DlManager.success(task, "安装完成: ${jdkHome.absolutePath}")
+                } else {
+                    // 自检不过必须清掉目录：否则下次重试会在坏目录上继续解压，
+                    // 已存在的文件被跳过，永远修不好（这是之前"怎么重装都不行"的原因）
+                    task.log("自检未通过，清理安装目录以便下次干净重试")
+                    runCatching { destDir.deleteRecursively() }
+                    if (Prefs.javaHome == jdkHome.absolutePath) Prefs.javaHome = ""
+                    DlManager.fail(task, "安装后 java -version 未通过：$check")
+                }
             } catch (e: Exception) {
                 dest?.let { d ->
                     if (!File(d, "bin/java").exists()) runCatching { d.deleteRecursively() }
@@ -487,13 +523,41 @@ object JdkManager {
             val output = p.inputStream.bufferedReader().use { it.readText() }.trim()
             val code = p.waitFor()
             task.log("自检 java -version → code=$code")
-            output.lines().filter { it.isNotBlank() }.take(4).forEach { task.log("   $it") }
-            if (code == 0) null else output.ifEmpty { "退出码 $code" }
+            output.lines().filter { it.isNotBlank() }.take(8).forEach { task.log("   $it") }
+            if (code == 0) return null
+
+            // 把最有信息量的那行挑出来，直接放进任务消息，不用用户翻日志
+            val reason = output.lines().firstOrNull {
+                it.contains("CANNOT LINK", true) || it.contains("not found", true) ||
+                        it.contains("Permission denied", true) || it.contains("error", true)
+            } ?: output.lines().firstOrNull { it.isNotBlank() } ?: "退出码 $code"
+            val hint = when {
+                reason.contains("CANNOT LINK", true) || reason.contains("not found", true) ->
+                    "（缺系统库，可能解包不完整或依赖包没装上）"
+                reason.contains("Permission denied", true) ->
+                    "（无法执行：系统限制了应用私有目录执行，或文件权限异常）"
+                else -> ""
+            }
+            "$reason$hint" 
         } catch (e: Exception) {
             task.log("自检异常: ${e.message}")
             e.message
         }
     }
+
+    /** 计算文件 SHA256（十六进制小写） */
+    private fun sha256Of(file: File): String = runCatching {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buf = ByteArray(256 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n <= 0) break
+                md.update(buf, 0, n)
+            }
+        }
+        md.digest().joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+    }.getOrDefault("")
 
     /** 兼容旧接口 */
     fun installJdk(ver: String, log: (String) -> Unit): Pair<Boolean, String> {
