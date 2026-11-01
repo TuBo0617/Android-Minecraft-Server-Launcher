@@ -86,8 +86,20 @@ object Terracotta {
      * 阻塞调用，请放在 IO 线程。返回 null 表示可用，否则是失败原因。
      */
     @Synchronized
+    /** 陶瓦的原生库只提供 64 位版本（arm64-v8a / x86_64） */
+    private fun abiSupported(): Boolean {
+        val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: return false
+        return abi == "arm64-v8a" || abi == "x86_64"
+    }
+
     fun ensureInit(ctx: Context): String? {
         if (initialized) return null
+        if (!abiSupported()) {
+            val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "未知"
+            val msg = "当前设备是 32 位（$abi），陶瓦联机只支持 64 位（arm64-v8a / x86_64）"
+            lastError = msg
+            return msg
+        }
         if (!loaded) {
             try {
                 // 交给官方 API 的静态块加载：它会先设好 net.burningtnt.terracotta.native_location

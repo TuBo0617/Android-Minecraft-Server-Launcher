@@ -26,14 +26,41 @@ android {
         minSdk 21
         targetSdk 34
         versionCode 2
-        versionName "2.0"
+        versionName "0.1-beta"
 
         buildConfigField "String", "CURSEFORGE_API", "\"${curseForgeApi}\""
+    }
+
+    /**
+     * beta 阶段用 debug 签名，保证产出的 APK 可以直接安装。
+     * 正式发版时应换成独立 keystore（放 CI secret，不要进仓库）。
+     */
+    signingConfigs {
+        release {
+            initWith signingConfigs.debug
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig = signingConfigs.release
+        }
+    }
+
+    /**
+     * 按 ABI 分包：arm64-v8a / armeabi-v7a / x86_64 各出一个 APK。
+     *
+     * 体积差异主要来自 libterracotta.so（7.5MB / 8.8MB），
+     * 只带一份能把安装包从 30MB 压到 15~18MB。
+     * 注意：陶瓦联机只有 64 位原生库，32 位包内没有它，联机会给出明确提示。
+     */
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+            universalApk false
         }
     }
 

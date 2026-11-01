@@ -107,7 +107,9 @@ object BedrockManager {
                 props.writeText(
                     "server-port=19132\n" +
                             "server-portv6=19133\n" +
-                            "online-mode=false\n"
+                            "online-mode=false\n" +
+                            // 离线模式不能开白名单，BDS 会拒绝启动
+                            "allow-list=false\n"
                 )
             }
             Pair(true, "BDS 安装完成（$count 个文件）")
@@ -120,29 +122,45 @@ object BedrockManager {
 
     fun rootfsDir(): File = File(JdkManager.prefixDir(), "glibc-rootfs")
 
-    /** 基岩版是否开启正版验证（默认关，读不到配置时按关闭处理） */
-    fun onlineMode(inst: Instance): Boolean {
+    /** 读 server.properties 里的某个布尔项 */
+    fun boolProp(inst: Instance, key: String, default: Boolean = false): Boolean {
         val f = File(inst.dir(), "server.properties")
-        if (!f.isFile) return false
+        if (!f.isFile) return default
         return runCatching {
-            f.readLines().firstOrNull { it.trimStart().startsWith("online-mode") }
-                ?.substringAfter('=', "false")?.trim()?.toBoolean() ?: false
-        }.getOrDefault(false)
+            f.readLines().firstOrNull { it.trimStart().startsWith("$key=") }
+                ?.substringAfter('=')?.trim()?.toBoolean() ?: default
+        }.getOrDefault(default)
     }
 
-    /** 改 server.properties 里的 online-mode，保留其它行 */
-    fun setOnlineMode(inst: Instance, enabled: Boolean) {
+    /** 改 server.properties 里的某个键，保留其它行 */
+    fun setProp(inst: Instance, key: String, value: String) {
         val f = File(inst.dir(), "server.properties")
         runCatching {
             if (!f.exists()) {
-                f.writeText("server-port=19132\nserver-portv6=19133\nonline-mode=$enabled\n")
+                f.writeText("server-port=19132\nserver-portv6=19133\n$key=$value\n")
                 return
             }
             val lines = f.readLines().toMutableList()
-            val idx = lines.indexOfFirst { it.trimStart().startsWith("online-mode") }
-            if (idx >= 0) lines[idx] = "online-mode=$enabled" else lines += "online-mode=$enabled"
+            val idx = lines.indexOfFirst { it.trimStart().startsWith("$key=") }
+            if (idx >= 0) lines[idx] = "$key=$value" else lines += "$key=$value"
             f.writeText(lines.joinToString("\n") + "\n")
         }
+    }
+
+    /** 基岩版是否开启正版验证（默认关，读不到配置时按关闭处理） */
+    fun onlineMode(inst: Instance): Boolean = boolProp(inst, "online-mode", false)
+
+    /**
+     * 开/关正版验证。
+     *
+     * BDS 有硬性约束：**`allow-list=true` 必须搭配 `online-mode=true`**，
+     * 否则启动时报 "Using an allowlist without online authentication ... is not allowed"
+     * 并直接退出（code=2）。所以关正版验证时顺手把白名单一起关掉，
+     * 避免用户只点一下开关就起不来。
+     */
+    fun setOnlineMode(inst: Instance, enabled: Boolean) {
+        setProp(inst, "online-mode", enabled.toString())
+        if (!enabled) setProp(inst, "allow-list", "false")
     }
 
     /**
