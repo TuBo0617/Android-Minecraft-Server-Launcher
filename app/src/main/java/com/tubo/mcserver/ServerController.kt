@@ -98,6 +98,7 @@ object ServerController {
         }
 
         if (inst.isBedrock()) {
+            BedrockManager.unsupportedReason()?.let { return fail(s, it) }
             val bin = inst.serverJar()
             if (!bin.exists()) return fail(s, "缺少 BDS: ${bin.name}，请先下载核心")
 

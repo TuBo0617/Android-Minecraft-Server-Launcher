@@ -28,6 +28,20 @@ object BedrockManager {
     private const val ROOTFS_URL_X86 =
         "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/ubuntu-base-24.04.3-base-amd64.tar.gz"
 
+    /**
+     * 当前设备能否运行基岩版。
+     *
+     * 微软只提供 **Linux x86_64** 的 BDS，从未发布 ARM 版本；
+     * 所以 arm64 / armeabi-v7a 设备即使装了 proot + rootfs 也跑不起来
+     * （需要 box64 之类 x86 模拟层，不在当前支持范围）。
+     */
+    fun isArchSupported(): Boolean = JdkManager.arch() == "x86_64"
+
+    /** 给界面用的说明；支持时返回 null */
+    fun unsupportedReason(): String? = if (isArchSupported()) null else
+        "基岩版服务端（BDS）官方只有 x86_64 版本，当前设备是 ${JdkManager.arch()}，无法运行。" +
+                "如需在 arm 设备上开基岩服，需要额外的 x86 模拟层，暂不支持。"
+
     data class Bds(val version: String, val url: String)
 
     /**
@@ -181,7 +195,9 @@ object BedrockManager {
         )
         val found = candidates.firstOrNull { it.isFile } ?: runCatching {
             prefix.walkTopDown().maxDepth(4).firstOrNull {
-                it.isFile && it.name == "loader" && !it.path.contains("glibc-rootfs")
+                // 真 loader 是 18KB 左右的 ELF；加体积下限，避免匹配到同名的杂项文件
+                it.isFile && it.name == "loader" && it.length() > 10_000 &&
+                        !it.path.contains("glibc-rootfs")
             }
         }.getOrNull() ?: return null
         // deb 解包时 exec 位不一定落上，这里兜一道；没有执行位的 loader proot 直接报
@@ -202,10 +218,34 @@ object BedrockManager {
     /** 解包格式版本；改了软链接策略就要 +1，让旧 rootfs 自动重解 */
     private const val ROOTFS_LAYOUT = "v2-guestlinks"
 
-    fun hasRootfs(): Boolean =
-        File(rootfsDir(), "bin/sh").exists() && File(rootfsDir(), ".layout").let {
+    /** rootfs 里的 libc 路径（随 ABI 变化） */
+    private fun libcPath(): String =
+        if (JdkManager.arch() == "aarch64") {
+            "usr/lib/aarch64-linux-gnu/libc.so.6"
+        } else {
+            "usr/lib/x86_64-linux-gnu/libc.so.6"
+        }
+
+    /**
+     * rootfs 是否完整可用。
+     *
+     * 只看 `bin/sh` 是不够的：tar 包如果被截断，`bin/sh` 往往已经解出来了，
+     * 但 `libc.so.6`、动态链接器这些排在后面的文件缺失，proot 一跑就失败。
+     * 所以三个关键文件都要在。
+     */
+    private fun rootfsComplete(dir: File): Boolean {
+        if (!File(dir, "bin/sh").exists()) return false
+        if (!File(dir, libcPath()).exists()) return false
+        return interpreterPaths().any { File(dir, it).exists() }
+    }
+
+    fun hasRootfs(): Boolean {
+        val dir = rootfsDir()
+        val marked = File(dir, ".layout").let {
             it.isFile && it.readText().trim() == ROOTFS_LAYOUT
         }
+        return marked && rootfsComplete(dir)
+    }
 
     /** 该 ABI 下 glibc 解释器的标准位置（Ubuntu 24.04 是 usrmerge 布局） */
     private fun interpreterPaths(): List<String> =
@@ -289,9 +329,25 @@ object BedrockManager {
     }.getOrDefault(false)
 
     /** 下载 proot 二进制到 termux-prefix/bin/proot */
+    /** proot 是否可用：文件在、体积正常、有执行位 */
+    private fun prootUsable(p: File): Boolean {
+        if (!p.isFile || p.length() < 100_000) return false
+        if (!p.canExecute()) p.setExecutable(true, false)
+        return p.canExecute()
+    }
+
     fun ensureProot(log: (String) -> Unit): File? {
         val proot = File(JdkManager.prefixDir(), "bin/proot")
-        if (proot.exists()) return proot
+        if (prootUsable(proot)) {
+            findProotLoader()   // 顺手把 loader 的执行位也补上
+            return proot
+        }
+        if (proot.exists()) {
+            // 文件在但不可用（半截包 / 没有执行位）——删掉重装，
+            // 否则 error=13 Permission denied 会一直跟着
+            log("proot 不完整，重新安装…")
+            runCatching { proot.delete() }
+        }
         log("下载 proot...")
         val url = "https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-${JdkManager.arch()}/Packages"
         return try {
@@ -325,6 +381,10 @@ object BedrockManager {
             proot.setExecutable(true, false)
             // loader 也要能执行，否则 proot 起不来
             findProotLoader()?.setExecutable(true, false)
+            if (!prootUsable(proot)) {
+                log("proot 安装后仍不可用（体积 ${proot.length()} 字节），可能下载不完整")
+                return null
+            }
             proot
         } catch (e: Exception) {
             log("proot 下载失败: ${e.message}")
@@ -333,9 +393,12 @@ object BedrockManager {
     }
 
     /**
-     * 准备 glibc rootfs（Ubuntu base）。已存在就直接返回。
+     * 准备 glibc rootfs（Ubuntu base）。已完整存在就直接返回。
      *
-     * 大约 30MB 下载 + 解压，只在第一次启动基岩版时做一次。
+     * 下载和解压都可能中断（30MB，手机网络很常见），所以：
+     * 1. 解压完必须**完整**（bin/sh + libc + 动态链接器都在）才算成功；
+     * 2. 不完整就丢掉缓存的 tar 重新下一遍，最多试两轮 ——
+     *    否则一个截断的缓存会被反复复用，永远装不好。
      */
     fun ensureRootfs(
         log: (String) -> Unit,
@@ -351,36 +414,46 @@ object BedrockManager {
             ROOTFS_URL_X86
         }
         val tar = File(App.ctx.cacheDir, "rootfs.tar.gz")
-        // 之前下过就复用，避免换解包策略时重复下载 30MB
-        val cached = tar.isFile && tar.length() > 20L * 1024 * 1024
-        return try {
-            if (cached) {
-                log("复用已下载的 rootfs 包（${tar.length() / 1024 / 1024}MB）")
-            } else {
-                log("下载 glibc rootfs（约 30MB）…")
-                if (!MultiDownloader.download(url, tar, onProgress = onProgress, shouldCancel = shouldCancel)) {
-                    log("rootfs 下载失败：$url")
-                    return null
+
+        repeat(2) { attempt ->
+            if (shouldCancel()) return null
+            try {
+                // 之前下过就复用；但如果是坏包，下面会删掉重来
+                val cached = tar.isFile && tar.length() > 20L * 1024 * 1024
+                if (cached) {
+                    log("复用已下载的 rootfs 包（${tar.length() / 1024 / 1024}MB）")
+                } else {
+                    log("下载 glibc rootfs（约 30MB）…")
+                    if (!MultiDownloader.download(url, tar, onProgress = onProgress, shouldCancel = shouldCancel)) {
+                        log("rootfs 下载失败：$url")
+                        return null
+                    }
                 }
+
+                log("解压 rootfs…")
+                dir.deleteRecursively()
+                val ok = DebExtractor.extractTar(tar, dir, gzip = true, log = log)
+                if (!ok) {
+                    log("rootfs 解压失败，删除缓存重试")
+                    runCatching { tar.delete() }
+                    return@repeat
+                }
+                File(dir, ".layout").writeText(ROOTFS_LAYOUT)
+                if (!rootfsComplete(dir)) {
+                    // 典型是被截断的 tar：bin/sh 解出来了，libc 没有
+                    log("rootfs 不完整（缺 libc 或动态链接器），删除缓存重新下载")
+                    runCatching { tar.delete() }
+                    return@repeat
+                }
+                runCatching { tar.delete() }
+                log("rootfs 就绪：${dir.absolutePath}")
+                return dir
+            } catch (e: Exception) {
+                log("rootfs 准备失败（第 ${attempt + 1} 次）：${e.message ?: e.javaClass.simpleName}")
+                runCatching { tar.delete() }
             }
-            log("解压 rootfs…")
-            dir.deleteRecursively()
-            val ok = DebExtractor.extractTar(tar, dir, gzip = true, log = log)
-            if (!ok) {
-                log("rootfs 解压失败")
-                return null
-            }
-            File(dir, ".layout").writeText(ROOTFS_LAYOUT)
-            if (!hasRootfs()) {
-                log("rootfs 解压不完整（找不到 bin/sh）")
-                return null
-            }
-            runCatching { tar.delete() }
-            log("rootfs 就绪：${dir.absolutePath}")
-            dir
-        } catch (e: Exception) {
-            log("rootfs 准备失败：${e.message ?: e.javaClass.simpleName}")
-            null
         }
+        log("rootfs 多次尝试仍不完整，请检查网络后重试")
+        return null
     }
 }

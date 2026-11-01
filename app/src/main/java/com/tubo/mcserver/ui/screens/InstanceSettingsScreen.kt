@@ -936,6 +936,21 @@ private fun BedrockCoreSection(inst: Instance) {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        BedrockManager.unsupportedReason()?.let { reason ->
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = reason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+
         SectionCard(
             title = "基岩版服务端（BDS）",
             subtitle = "官方 Linux 版，通过 proot + glibc rootfs 运行"
@@ -979,7 +994,7 @@ private fun BedrockCoreSection(inst: Instance) {
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    enabled = !busy && latest != null,
+                    enabled = !busy && latest != null && BedrockManager.isArchSupported(),
                     onClick = {
                         busy = true
                         msg = null

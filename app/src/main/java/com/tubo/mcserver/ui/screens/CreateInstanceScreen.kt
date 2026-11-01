@@ -152,7 +152,14 @@ fun CreateInstanceScreen(
                 }
             }
 
-            SectionCard(title = "版本类型", subtitle = "Java 版可选各种核心；基岩版只有官方 BDS") {
+            SectionCard(
+                title = "版本类型",
+                subtitle = if (com.tubo.mcserver.BedrockManager.isArchSupported()) {
+                    "Java 版可选各种核心；基岩版只有官方 BDS"
+                } else {
+                    "基岩版不可用：官方 BDS 只有 x86_64 版本"
+                }
+            ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     androidx.compose.material3.FilterChip(
                         selected = platform == "java",
@@ -161,6 +168,8 @@ fun CreateInstanceScreen(
                     )
                     androidx.compose.material3.FilterChip(
                         selected = platform == "bedrock",
+                        // 官方 BDS 只有 x86_64，arm 设备选了也跑不起来
+                        enabled = com.tubo.mcserver.BedrockManager.isArchSupported(),
                         onClick = { platform = "bedrock" },
                         label = { Text("基岩版") }
                     )
